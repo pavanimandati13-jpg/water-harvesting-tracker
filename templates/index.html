@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Water Harvesting Tracker</title>
+<style>
+  :root { --bg:#f0f7fa; --card:#fff; --text:#1f2937; --muted:#6b7280; --accent:#0e7490; --water:#38bdf8; --ok:#16a34a; --bad:#dc2626; --line:#e2e8f0; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0b1820; --card:#13262f; --text:#f1f5f9; --muted:#94a3b8; --accent:#22d3ee; --line:#264452; } }
+  * { box-sizing:border-box; } body { margin:0; font-family:system-ui,Segoe UI,Arial,sans-serif; background:var(--bg); color:var(--text); }
+  header { background:var(--accent); color:#fff; padding:16px 24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
+  header h1 { margin:0; font-size:1.35rem; } header select { padding:8px; border-radius:6px; border:none; min-width:200px; }
+  main { max-width:1000px; margin:0 auto; padding:20px; }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  .two { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+  .stat { border:1px solid var(--line); border-radius:8px; padding:10px; } .stat b { display:block; font-size:1.25rem; } .stat span { color:var(--muted); font-size:.8rem; }
+  input, select, button { padding:9px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--text); font-size:.95rem; font-family:inherit; }
+  button { background:var(--accent); color:#fff; border:none; cursor:pointer; font-weight:600; } button.ghost { background:transparent; color:var(--accent); border:1px solid var(--accent); } button.x { background:none; color:var(--bad); padding:2px 8px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; } .row input, .row select { flex:1; min-width:110px; }
+  h2 { margin:0 0 10px; font-size:1.05rem; } .meta { color:var(--muted); font-size:.85rem; }
+  .gauge { height:26px; background:var(--line); border-radius:13px; overflow:hidden; margin:8px 0; } .gauge div { height:100%; background:linear-gradient(90deg,#0ea5e9,var(--water)); transition:width .5s; }
+  .chart { display:flex; align-items:flex-end; gap:14px; height:170px; padding-top:10px; border-bottom:1px solid var(--line); overflow-x:auto; }
+  .grp { display:flex; flex-direction:column; align-items:center; min-width:70px; } .bars { display:flex; align-items:flex-end; gap:4px; height:140px; }
+  .bar { width:22px; border-radius:4px 4px 0 0; min-height:2px; } .bar.h { background:var(--water); } .bar.u { background:#f59e0b; } .grp small { font-size:.7rem; color:var(--muted); margin-top:4px; }
+  .legend span { display:inline-block; width:10px; height:10px; border-radius:2px; margin:0 4px 0 12px; } 
+  table { width:100%; border-collapse:collapse; font-size:.88rem; } td, th { text-align:left; padding:5px 4px; border-bottom:1px solid var(--line); } th { color:var(--muted); font-weight:600; }
+  #msg { padding:10px; border-radius:6px; margin-bottom:12px; display:none; } #msg.ok { background:#dcfce7; color:#166534; display:block; } #msg.err { background:#fee2e2; color:#991b1b; display:block; }
+</style>
+</head>
+<body>
+<header><h1>Water Harvesting Tracker</h1>
+  <div><select id="site" onchange="load()"></select> <button class="ghost" style="color:#fff;border-color:#fff" onclick="delSite()">Delete site</button></div></header>
+<main>
+  <div id="msg"></div>
+
+  <div class="panel">
+    <div class="stats" id="stats"></div>
+    <div class="gauge"><div id="gauge" style="width:0"></div></div>
+    <div class="meta" id="gaugeText"></div>
+  </div>
+
+  <div class="panel"><h2>Monthly harvested vs used (litres)</h2>
+    <div class="meta legend"><span style="background:var(--water)"></span>Harvested<span style="background:#f59e0b"></span>Used</div>
+    <div class="chart" id="chart"></div></div>
+
+  <div class="two">
+    <div class="panel"><h2>Log rainfall</h2>
+      <div class="row"><input type="date" id="rdate"><input type="number" id="rmm" min="0" step="0.1" placeholder="Rainfall (mm)"><button onclick="addRain()">Add</button></div>
+      <table id="rtable"></table></div>
+    <div class="panel"><h2>Log water usage</h2>
+      <div class="row"><input type="date" id="udate"><input type="number" id="ul" min="0" placeholder="Litres">
+        <select id="up"><option>Gardening</option><option>Cleaning</option><option>Toilets</option><option>Laundry</option><option>Drinking (treated)</option><option>Other</option></select><button onclick="addUse()">Add</button></div>
+      <table id="utable"></table></div>
+  </div>
+
+  <div class="two">
+    <div class="panel"><h2>Add a harvesting site</h2>
+      <div class="row"><input id="sn" placeholder="Site name"><input id="sl" placeholder="Location"></div>
+      <div class="row"><input id="sa" type="number" placeholder="Roof area (m²)"><input id="sc" type="number" step="0.05" value="0.8" title="Runoff coefficient"><input id="st" type="number" placeholder="Tank capacity (L)"></div>
+      <button onclick="addSite()">Create site</button>
+      <p class="meta">Runoff coefficient: concrete roof about 0.8 to 0.9, tiled about 0.75, metal about 0.9.</p></div>
+    <div class="panel"><h2>Quick estimator</h2>
+      <div class="row"><input id="ea" type="number" placeholder="Roof area (m²)"><input id="er" type="number" placeholder="Annual rainfall (mm)"><input id="ec" type="number" step="0.05" value="0.8"></div>
+      <button onclick="estimate()">Estimate</button><p id="eres" class="meta"></p></div>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const fmt = n => Number(n).toLocaleString('en-IN');
+const today = new Date().toISOString().slice(0, 10);
+$('rdate').value = today; $('udate').value = today;
+function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+function show(t, ok) { const m = $('msg'); m.textContent = t; m.className = ok ? 'ok' : 'err'; setTimeout(() => m.className = '', 4000); }
+async function api(path, method = 'GET', body) {
+  const r = await fetch('/api' + path, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Request failed'); return d;
+}
+async function sites(selectId) {
+  const list = await api('/sites'); const sel = $('site'); const keep = selectId || sel.value;
+  sel.innerHTML = list.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  if (keep && list.some(s => String(s.id) === String(keep))) sel.value = keep;
+  return list.length;
+}
+async function load() {
+  if (!$('site').value) { $('stats').innerHTML = '<p class="meta">Add a site to begin.</p>'; return; }
+  const id = $('site').value;
+  const [s, rain, use] = await Promise.all([api(`/sites/${id}/summary`), api(`/sites/${id}/rainfall`), api(`/sites/${id}/usage`)]);
+  const stat = (v, l) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`;
+  $('stats').innerHTML = stat(fmt(s.current_level) + ' L', 'Current tank level') + stat(fmt(s.stored) + ' L', 'Total harvested (stored)') +
+    stat(fmt(s.total_used) + ' L', 'Total used') + stat(fmt(s.overflow_wasted) + ' L', 'Overflow wasted (tank full)') +
+    stat(fmt(s.shortfall) + ' L', 'Unmet demand (tank empty)') + stat(s.days_remaining === null ? '-' : s.days_remaining + ' days', 'Supply left at recent usage');
+  $('gauge').style.width = s.percent_full + '%';
+  $('gaugeText').textContent = `${s.percent_full}% of ${fmt(s.site.tank_capacity)} L tank · roof ${s.site.roof_area} m² · coefficient ${s.site.runoff_coeff} · total rain logged ${s.total_rain_mm} mm`;
+  const max = Math.max(1, ...s.monthly.flatMap(m => [m.harvested, m.used]));
+  $('chart').innerHTML = s.monthly.map(m => `<div class="grp"><div class="bars"><div class="bar h" title="Harvested ${fmt(m.harvested)} L" style="height:${m.harvested / max * 100}%"></div>
+    <div class="bar u" title="Used ${fmt(m.used)} L" style="height:${m.used / max * 100}%"></div></div><small>${m.month}</small></div>`).join('') || '<p class="meta">No data yet.</p>';
+  $('rtable').innerHTML = '<tr><th>Date</th><th>mm</th><th>Litres</th><th></th></tr>' + rain.slice(0, 8).map(r => `<tr><td>${r.date}</td><td>${r.mm}</td><td>${fmt(r.litres)}</td><td><button class="x" onclick="del('rainfall',${r.id})">✕</button></td></tr>`).join('');
+  $('utable').innerHTML = '<tr><th>Date</th><th>Litres</th><th>Purpose</th><th></th></tr>' + use.slice(0, 8).map(u => `<tr><td>${u.date}</td><td>${fmt(u.litres)}</td><td>${esc(u.purpose)}</td><td><button class="x" onclick="del('usage',${u.id})">✕</button></td></tr>`).join('');
+}
+async function addRain() { try { await api(`/sites/${$('site').value}/rainfall`, 'POST', { date: $('rdate').value, mm: $('rmm').value }); $('rmm').value = ''; load(); } catch (e) { show(e.message, false); } }
+async function addUse() { try { await api(`/sites/${$('site').value}/usage`, 'POST', { date: $('udate').value, litres: $('ul').value, purpose: $('up').value }); $('ul').value = ''; load(); } catch (e) { show(e.message, false); } }
+async function del(kind, id) { await api(`/${kind}/${id}`, 'DELETE'); load(); }
+async function addSite() {
+  try {
+    const r = await api('/sites', 'POST', { name: $('sn').value, location: $('sl').value, roof_area: $('sa').value, runoff_coeff: $('sc').value, tank_capacity: $('st').value });
+    await sites(r.id); show('Site created', true); load();
+  } catch (e) { show(e.message, false); }
+}
+async function delSite() { if (!$('site').value || !confirm('Delete this site and all its records?')) return; await api('/sites/' + $('site').value, 'DELETE'); await sites(); load(); }
+async function estimate() {
+  try {
+    const r = await api(`/estimate?area=${$('ea').value}&rainfall=${$('er').value}&coeff=${$('ec').value}`);
+    $('eres').textContent = `About ${fmt(r.litres_per_year)} L per year (${r.kilolitres_per_year} kL), roughly ${fmt(r.avg_litres_per_day)} L per day. A tank near ${fmt(r.suggested_tank_litres)} L is a reasonable start.`;
+  } catch (e) { show(e.message, false); }
+}
+sites().then(load);
+</script>
+</body>
+</html>
